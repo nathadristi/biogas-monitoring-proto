@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Monitoring Biogas Jetak</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Sistem Monitoring Biogas Jetak</h1>
+                <p class="text-slate-500 text-sm mt-1" id="realtime-clock">Memuat waktu...</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-medium text-slate-500 uppercase tracking-wider">Status Sistem:</span>
+                <div id="global-status" class="px-4 py-2 rounded-full font-bold text-sm border-2 transition-all duration-300 shadow-sm flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-current"></span>
+                    <span id="global-status-text">MEMUAT...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Methane Card -->
+            <div id="card-ch4" class="p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between h-40 shadow-sm bg-white border-slate-200">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 class="text-slate-500 text-sm font-semibold uppercase tracking-wider">Metana (CH₄)</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Sensor MQ-4</p>
+                    </div>
+                    <span id="badge-ch4" class="px-3 py-1 rounded-full text-xs font-bold uppercase border bg-slate-100 text-slate-600 border-slate-200">MEMUAT</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="value-ch4" class="text-4xl font-bold font-mono text-slate-800 transition-colors">0</span>
+                    <span class="text-slate-500 font-medium">PPM</span>
+                </div>
+            </div>
+
+            <!-- Pressure Card -->
+            <div id="card-pressure" class="p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between h-40 shadow-sm bg-white border-slate-200">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 class="text-slate-500 text-sm font-semibold uppercase tracking-wider">Tekanan Biogas</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Sensor HX710B</p>
+                    </div>
+                    <span id="badge-pressure" class="px-3 py-1 rounded-full text-xs font-bold uppercase border bg-slate-100 text-slate-600 border-slate-200">MEMUAT</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="value-pressure" class="text-4xl font-bold font-mono text-slate-800 transition-colors">0.0</span>
+                    <span class="text-slate-500 font-medium">mbar</span>
+                </div>
+            </div>
+
+            <!-- Connection Card -->
+            <div class="p-6 rounded-2xl border-2 border-emerald-500 bg-emerald-50 flex flex-col justify-between h-40 shadow-sm">
+                <div>
+                    <h2 class="text-emerald-800 text-sm font-semibold uppercase tracking-wider">Koneksi Alat</h2>
+                    <p class="text-xs text-emerald-600/80 mt-0.5">ESP32 Gateway</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="relative flex h-4 w-4">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
+                    </div>
+                    <span class="text-2xl font-bold text-emerald-700 tracking-tight">ONLINE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">Tren Data 10 Menit Terakhir</h2>
+            <div class="relative h-80 w-full">
+                <canvas id="monitoringChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Alerts Log -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-slate-800">Log Peringatan Terbaru</h2>
+                <span class="text-xs font-medium bg-slate-100 text-slate-600 px-3 py-1 rounded-full">5 Entri Terakhir</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-sm uppercase tracking-wider border-y border-slate-200">
+                            <th class="py-3 px-4 font-semibold">Waktu</th>
+                            <th class="py-3 px-4 font-semibold">Parameter</th>
+                            <th class="py-3 px-4 font-semibold">Nilai</th>
+                            <th class="py-3 px-4 font-semibold">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table-body" class="divide-y divide-slate-100 text-sm">
+                        <!-- Logs akan diinjeksi via JS -->
+                        <tr><td colspan="4" class="py-4 px-4 text-center text-slate-400">Menunggu data peringatan...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 1. SETUP CLOCK ---
+        function updateClock() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute:'2-digit', second:'2-digit' };
+            document.getElementById('realtime-clock').textContent = now.toLocaleDateString('id-ID', options);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- 2. SETUP CHART ---
+        const ctx = document.getElementById('monitoringChart').getContext('2d');
+        const monitoringChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], 
+                datasets: [
+                    {
+                        label: 'Metana (PPM)',
+                        data: [],
+                        borderColor: '#eab308', // Amber
+                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y',
+                        fill: true
+                    },
+                    {
+                        label: 'Tekanan (mbar)',
+                        data: [],
+                        borderColor: '#3b82f6', // Blue
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y1',
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false, drawBorder: false }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'PPM (CH₄)' },
+                        grid: { color: '#f1f5f9' },
+                        min: 0,
+                        max: 6000
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'mbar (Tekanan)' },
+                        grid: { drawOnChartArea: false },
+                        min: 0,
+                        max: 40
+                    },
+                }
+            }
+        });
+
+        // --- 3. DATA LOGIC & UI UPDATES ---
+        let alertLogs = [];
+        const MAX_LOGS = 5;
+
+        function getMethaneStyling(val) {
+            if (val >= 5000) return { status: 'BAHAYA LEDAKAN', baseClass: 'bg-red-50 border-red-500', textClass: 'text-red-700', badgeClass: 'bg-red-100 text-red-700 border-red-200 animate-pulse', level: 3 };
+            if (val >= 1000) return { status: 'INDIKASI BOCOR', baseClass: 'bg-amber-50 border-amber-500', textClass: 'text-amber-700', badgeClass: 'bg-amber-100 text-amber-700 border-amber-200', level: 2 };
+            return { status: 'NORMAL', baseClass: 'bg-emerald-50 border-emerald-500', textClass: 'text-emerald-700', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200', level: 1 };
+        }
+
+        function getPressureStyling(val) {
+            if (val > 30) return { status: 'OVERPRESSURE', baseClass: 'bg-red-50 border-red-500', textClass: 'text-red-700', badgeClass: 'bg-red-100 text-red-700 border-red-200 animate-pulse', level: 3 };
+            if (val >= 5 && val <= 20) return { status: 'IDEAL', baseClass: 'bg-emerald-50 border-emerald-500', textClass: 'text-emerald-700', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200', level: 1 };
+            if (val < 2) return { status: 'KOSONG', baseClass: 'bg-slate-50 border-slate-400', textClass: 'text-slate-600', badgeClass: 'bg-slate-200 text-slate-700 border-slate-300', level: 0 };
+            
+            // Handling intermediate gaps (2-4.9 & 20.1-30) logically as warning states
+            return { status: 'WASPADA', baseClass: 'bg-amber-50 border-amber-500', textClass: 'text-amber-700', badgeClass: 'bg-amber-100 text-amber-700 border-amber-200', level: 2 };
+        }
+
+        function updateLogsUI() {
+            const tbody = document.getElementById('log-table-body');
+            if (alertLogs.length === 0) return;
+            
+            tbody.innerHTML = alertLogs.map(log => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="py-3 px-4 font-mono text-slate-600">${log.time}</td>
+                    <td class="py-3 px-4 font-medium text-slate-800">${log.param}</td>
+                    <td class="py-3 px-4 font-mono">${log.val}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-1 text-xs font-bold rounded border ${log.badgeClass}">${log.status}</span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function generateRandomData() {
+            // Logic to force variations crossing all thresholds for demonstration
+            const rand = Math.random();
+            let ch4Value, pressureValue;
+
+            if (rand < 0.3) {
+                // Normal
+                ch4Value = Math.floor(Math.random() * 900);
+                pressureValue = 5 + (Math.random() * 15);
+            } else if (rand < 0.6) {
+                // Leak / Warning
+                ch4Value = 1000 + Math.floor(Math.random() * 3900);
+                pressureValue = 21 + (Math.random() * 8);
+            } else if (rand < 0.8) {
+                // Danger
+                ch4Value = 5000 + Math.floor(Math.random() * 1000);
+                pressureValue = 31 + (Math.random() * 5);
+            } else {
+                // Empty / Low
+                ch4Value = Math.floor(Math.random() * 500);
+                pressureValue = Math.random() * 1.9;
+            }
+
+            return { ch4: ch4Value, pressure: parseFloat(pressureValue.toFixed(1)) };
+        }
+
+        function updateDashboard() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const data = generateRandomData();
+            
+            const ch4Style = getMethaneStyling(data.ch4);
+            const pressStyle = getPressureStyling(data.pressure);
+
+            // Update DOM Elements
+            document.getElementById('value-ch4').textContent = data.ch4;
+            document.getElementById('value-ch4').className = `text-4xl font-bold font-mono transition-colors ${ch4Style.textClass}`;
+            document.getElementById('badge-ch4').textContent = ch4Style.status;
+            document.getElementById('badge-ch4').className = `px-3 py-1 rounded-full text-xs font-bold uppercase border ${ch4Style.badgeClass}`;
+            document.getElementById('card-ch4').className = `p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between h-40 shadow-sm ${ch4Style.baseClass} ${ch4Style.level === 3 ? 'animate-pulse' : ''}`;
+
+            document.getElementById('value-pressure').textContent = data.pressure;
+            document.getElementById('value-pressure').className = `text-4xl font-bold font-mono transition-colors ${pressStyle.textClass}`;
+            document.getElementById('badge-pressure').textContent = pressStyle.status;
+            document.getElementById('badge-pressure').className = `px-3 py-1 rounded-full text-xs font-bold uppercase border ${pressStyle.badgeClass}`;
+            document.getElementById('card-pressure').className = `p-6 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between h-40 shadow-sm ${pressStyle.baseClass} ${pressStyle.level === 3 ? 'animate-pulse' : ''}`;
+
+            // Global Status Logic
+            const globalEl = document.getElementById('global-status');
+            const globalTextEl = document.getElementById('global-status-text');
+            const maxLevel = Math.max(ch4Style.level, pressStyle.level);
+
+            if (maxLevel === 3) {
+                globalEl.className = 'px-4 py-2 rounded-full font-bold text-sm border-2 shadow-sm flex items-center gap-2 bg-red-100 text-red-700 border-red-300 animate-pulse';
+                globalTextEl.textContent = 'BAHAYA';
+            } else if (maxLevel === 2) {
+                globalEl.className = 'px-4 py-2 rounded-full font-bold text-sm border-2 shadow-sm flex items-center gap-2 bg-amber-100 text-amber-700 border-amber-300';
+                globalTextEl.textContent = 'WASPADA';
+            } else {
+                globalEl.className = 'px-4 py-2 rounded-full font-bold text-sm border-2 shadow-sm flex items-center gap-2 bg-emerald-100 text-emerald-700 border-emerald-300';
+                globalTextEl.textContent = 'AMAN';
+            }
+
+            // Update Chart Data (Max 20 points for better visibility)
+            if (monitoringChart.data.labels.length >= 20) {
+                monitoringChart.data.labels.shift();
+                monitoringChart.data.datasets[0].data.shift();
+                monitoringChart.data.datasets[1].data.shift();
+            }
+            monitoringChart.data.labels.push(timeString);
+            monitoringChart.data.datasets[0].data.push(data.ch4);
+            monitoringChart.data.datasets[1].data.push(data.pressure);
+            monitoringChart.update();
+
+            // Insert Alert Logs if abnormal
+            let logAdded = false;
+            if (ch4Style.level >= 2) {
+                alertLogs.unshift({ time: timeString, param: 'Metana (CH₄)', val: `${data.ch4} PPM`, status: ch4Style.status, badgeClass: ch4Style.badgeClass.replace('animate-pulse', '') });
+                logAdded = true;
+            }
+            if (pressStyle.level >= 2 || pressStyle.level === 0) {
+                alertLogs.unshift({ time: timeString, param: 'Tekanan', val: `${data.pressure} mbar`, status: pressStyle.status, badgeClass: pressStyle.badgeClass.replace('animate-pulse', '') });
+                logAdded = true;
+            }
+            
+            if (logAdded) {
+                if (alertLogs.length > MAX_LOGS) alertLogs = alertLogs.slice(0, MAX_LOGS);
+                updateLogsUI();
+            }
+        }
+
+        // Initialize & Run Simulation
+        updateDashboard();
+        setInterval(updateDashboard, 3000);
+    </script>
+</body>
+</html>
